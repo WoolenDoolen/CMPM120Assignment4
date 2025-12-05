@@ -24,13 +24,13 @@ const GAME_CONFIG = {
   player: {
     moveSpeed: 130, // base move speed
     maxHealth: 5,
-    wardRange: 60,
+    wardRange: 70,
     wardConeAngle: 70,
     wardCooldown: 250,
     baseDamage: 2,
     maxTotems: 2,
     totemSlowFactor: 0.4,
-    totemRadius: 96,
+    totemRadius: 200,
     totemDuration: 8000,
     totemRechargeTime: 5000,
   },
@@ -370,7 +370,7 @@ class MainScene extends Phaser.Scene {
     const enemy = this.enemiesGroup.create(x, y, key);
     enemy.type = type;
     enemy.baseSpeed = type === "ghost" ? 90 : type === "skeleton" ? 50 : 45;
-    enemy.maxHealth = type === "ghost" ? 3 : type === "skeleton" ? 3 : 15;
+    enemy.maxHealth = type === "ghost" ? 6 : type === "skeleton" ? 8 : 15;
     enemy.health = enemy.maxHealth;
     enemy.setCollideWorldBounds(true);
     enemy.setDepth(9 + (type === "boss" ? 1 : 0));
@@ -378,7 +378,7 @@ class MainScene extends Phaser.Scene {
 
     // Force reasonable size on this tilemap (16px tiles)
     if (type === "boss") {
-      enemy.setDisplaySize(48, 48);
+      enemy.setDisplaySize(48, 64);
     } else {
       enemy.setDisplaySize(24, 32);
     }
@@ -740,17 +740,18 @@ class MainScene extends Phaser.Scene {
   showTitleScreen() {
     const lines = [
       "City Watchkeeper",
+      "Protect the Building and Survive",
       "",
       "Controls:",
       "Move: WASD or Arrow Keys",
-      "Ward Attack: Space or Left Mouse",
-      "Ward Totem (slow field): Shift or Right Mouse",
-      "Interact (altar / upgrades): E",
+      "Ward Attack(Forward Cone Attack): Left click or Space",
+      "Ward Totem (slow field): Right Click or Shift",
+      "Interact (altar / upgrades guy): E",
       "Pause: Esc",
       "",
       "Goal: Survive all shifts and protect the mausoleum.",
       "",
-      "Press ENTER to begin your shift.",
+      "Press Space to begin your shift.",
     ];
 
     this.titleOverlay.setVisible(true);
@@ -998,7 +999,7 @@ class MainScene extends Phaser.Scene {
     const circle = this.add.circle(
       this.player.x,
       this.player.y,
-      10,
+      24,
       0x88ffff,
       0.8
     );
@@ -1070,7 +1071,7 @@ class MainScene extends Phaser.Scene {
   update() {
     // Handle title screen
     if (this.gamePhase === "title") {
-      if (Phaser.Input.Keyboard.JustDown(this.keys.ENTER)) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
         this.hideTitleScreen();
       }
       return;
