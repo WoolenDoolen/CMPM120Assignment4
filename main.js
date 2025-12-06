@@ -3,8 +3,8 @@
 window.addEventListener("load", () => {
   const config = {
     type: Phaser.AUTO,
-    width: 1280, // 16:9, reasonably high-res
-    height: 720,
+    width: 1280,
+    height: 960,
     pixelArt: true,
     physics: {
       default: "arcade",
@@ -22,20 +22,19 @@ window.addEventListener("load", () => {
 // Tunable gameplay numbers
 const GAME_CONFIG = {
   player: {
-    moveSpeed: 130, // base move speed
+    moveSpeed: 130,
     maxHealth: 5,
-    wardRange: 70,
+    wardRange: 60,
     wardConeAngle: 70,
     wardCooldown: 250,
     baseDamage: 2,
     maxTotems: 2,
     totemSlowFactor: 0.4,
-    totemRadius: 200,
+    totemRadius: 96,
     totemDuration: 8000,
     totemRechargeTime: 5000,
   },
   mausoleumMaxHealth: 5,
-  // three normal waves, then a boss wave
   waves: [
     { ghosts: 6, skeletons: 0 },
     { ghosts: 9, skeletons: 3 },
@@ -80,6 +79,12 @@ class MainScene extends Phaser.Scene {
     this.load.image("boss_hit", enemyBase + "Boss_hit.png");
     this.load.image("boss_dead", enemyBase + "Boss_dead.png");
     this.load.image("boss_ani", enemyBase + "Boss_ani.png"); // optional
+
+    // --- Audio assets ---
+    this.load.audio("sfx_ward", "audio/ward.mp3");
+    this.load.audio("sfx_totem", "audio/totem.ogg");
+    this.load.audio("sfx_hit", "audio/hit.mp3");
+    this.load.audio("music_loop", "audio/music_loop.mp3");
   }
 
   create() {
@@ -89,6 +94,7 @@ class MainScene extends Phaser.Scene {
     this.createAltarHighlight();
     this.createUI();
     this.createInput();
+    this.createAudio();
 
     // Disable right-click browser menu so we can use RMB for totems
     this.input.mouse.disableContextMenu();
@@ -120,7 +126,7 @@ class MainScene extends Phaser.Scene {
 
     this.nextAttackTime = 0;
     this.totemCharges = this.playerStats.maxTotems;
-    this.totems = []; // array of circle game objects
+    this.totems = [];
 
     this.playerDirection = "down";
     this.invincibleUntil = 0;
@@ -129,13 +135,28 @@ class MainScene extends Phaser.Scene {
     this.showTitleScreen();
   }
 
+  // --- Audio setup ---------------------------------------------
+
+  createAudio() {
+    this.sfxWard = this.sound.add("sfx_ward", { volume: 0.09 });
+    this.sfxTotem = this.sound.add("sfx_totem", { volume: 0.09 });
+    this.sfxHit = this.sound.add("sfx_hit", { volume: 0.09 });
+
+    this.music = this.sound.add("music_loop", {
+      loop: true,
+      volume: 0.1,
+    });
+
+    // Start music right away (title + gameplay)
+    this.music.play();
+  }
+
   // --- Map / layers / spawn points -----------------------------
 
   createMap() {
     const map = this.make.tilemap({ key: "map" });
     this.map = map;
 
-    // Tileset name in Tiled should be "RPG_urban"
     const tileset = map.addTilesetImage("RPG_urban", "tiles");
     this.groundLayer = map.createLayer("Ground", tileset, 0, 0);
     this.wallsLayer = map.createLayer("Walls", tileset, 0, 0);
@@ -190,8 +211,7 @@ class MainScene extends Phaser.Scene {
       const upObj = poiLayer.objects.find(
         (o) =>
           o.name.toLowerCase().includes("upgrade") ||
-          o.name.toLowerCase().includes("caretaker") ||
-          o.name.toLowerCase().includes("altar")
+          o.name.toLowerCase().includes("caretaker")
       );
       if (upObj) {
         this.upgradeAltarPos = { x: upObj.x, y: upObj.y };
@@ -239,7 +259,6 @@ class MainScene extends Phaser.Scene {
 
     const { x, y } = this.upgradeAltarPos;
 
-    // Pulsing glow circle
     this.altarHighlight = this.add.circle(x, y - 4, 18, 0xffff00, 0.35);
     this.altarHighlight.setDepth(11);
 
@@ -252,7 +271,6 @@ class MainScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Floating label
     this.altarLabel = this.add
       .text(x, y - 32, "Altar", {
         fontFamily: "sans-serif",
@@ -292,7 +310,6 @@ class MainScene extends Phaser.Scene {
   }
 
   createPlayerAnimations() {
-    // Avoid duplicate warnings when restarting
     if (this.anims.exists("walk-down")) return;
 
     const dirs = ["down", "left", "right", "up"];
@@ -340,7 +357,6 @@ class MainScene extends Phaser.Scene {
       vy * this.playerStats.moveSpeed
     );
 
-    // Pick facing direction for animation + cone attack
     if (Math.abs(vx) > Math.abs(vy)) {
       this.playerDirection = vx > 0 ? "right" : "left";
     } else {
@@ -370,15 +386,14 @@ class MainScene extends Phaser.Scene {
     const enemy = this.enemiesGroup.create(x, y, key);
     enemy.type = type;
     enemy.baseSpeed = type === "ghost" ? 90 : type === "skeleton" ? 50 : 45;
-    enemy.maxHealth = type === "ghost" ? 6 : type === "skeleton" ? 8 : 15;
+    enemy.maxHealth = type === "ghost" ? 3 : type === "skeleton" ? 3 : 15;
     enemy.health = enemy.maxHealth;
     enemy.setCollideWorldBounds(true);
     enemy.setDepth(9 + (type === "boss" ? 1 : 0));
     enemy.isBoss = type === "boss";
 
-    // Force reasonable size on this tilemap (16px tiles)
     if (type === "boss") {
-      enemy.setDisplaySize(48, 64);
+      enemy.setDisplaySize(48, 48);
     } else {
       enemy.setDisplaySize(24, 32);
     }
@@ -402,7 +417,6 @@ class MainScene extends Phaser.Scene {
   spawnBossWave() {
     this.enemiesRemaining = 0;
 
-    // Extra skeletons so the arena isn't empty
     for (let i = 0; i < GAME_CONFIG.bossExtraSkeletons; i++) {
       const spawn = this.chooseSpawn(
         this.skeletonSpawns.length ? this.skeletonSpawns : this.ghostSpawns
@@ -478,6 +492,12 @@ class MainScene extends Phaser.Scene {
 
     this.playerStats.health -= 1;
     this.invincibleUntil = now + 1000;
+
+    // play hit sound when the player takes damage
+    if (this.sfxHit) {
+      this.sfxHit.play();
+    }
+
     this.cameras.main.flash(200, 255, 0, 0);
     this.updateUI();
 
@@ -492,6 +512,9 @@ class MainScene extends Phaser.Scene {
 
     const baseKey = enemy.type === "boss" ? "boss" : enemy.type;
     enemy.setTexture(baseKey + "_hit");
+
+    // Play hit SFX
+    if (this.sfxHit) this.sfxHit.play();
 
     this.time.delayedCall(120, () => {
       if (!enemy.active) return;
@@ -531,7 +554,6 @@ class MainScene extends Phaser.Scene {
       this.enemiesRemaining <= 0 &&
       this.currentWaveIndex >= GAME_CONFIG.waves.length
     ) {
-      // Edge case: only minions in boss wave
       this.handleVictory();
     } else if (
       this.gamePhase === "wave" &&
@@ -557,18 +579,32 @@ class MainScene extends Phaser.Scene {
 
   handleGameOver(message) {
     this.gamePhase = "gameOver";
+    this.showMessage("");
+
+    // Stop music & show red overlay
+    if (this.music) this.music.stop();
+
+    this.gameOverOverlay.setVisible(true);
+    this.gameOverText.setText(message).setVisible(true);
+
     this.enemiesGroup.clear(true, true);
-    this.showGameOverScreen(message);
   }
 
   handleVictory() {
     this.gamePhase = "victory";
-    this.enemiesGroup.clear(true, true);
-    this.showWinScreen();
+    this.showMessage("");
+
+    if (this.music) this.music.stop();
+
+    this.victoryOverlay.setVisible(true);
+    this.victoryText
+      .setText("You survived the night!\nPress R to restart.")
+      .setVisible(true);
   }
 
   // --- UI & overlays -------------------------------------------
 
+  // --- UI & overlays -------------------------------------------
   createUI() {
     const style = {
       fontFamily: "sans-serif",
@@ -576,29 +612,28 @@ class MainScene extends Phaser.Scene {
       fill: "#ffffff",
     };
 
+    // Top-left HUD: HP / mausoleum / totems
     this.statusText = this.add
-      .text(8, 8, "", { ...style, stroke: "#000000", strokeThickness: 3 })
+      .text(8, 8, "", style)
       .setScrollFactor(0)
       .setDepth(20);
 
     this.waveText = this.add
-      .text(8, 28, "", { ...style, stroke: "#000000", strokeThickness: 3 })
+      .text(8, 28, "", style)
       .setScrollFactor(0)
       .setDepth(20);
 
-    // Center-top message text with black outline
+    // Message at top center with black outline
     this.messageText = this.add
-      .text(this.scale.width / 2, 8, "", {
+      .text(this.scale.width / 2, 32, "", {
         ...style,
         fontSize: "18px",
-        align: "center",
-        stroke: "#000000",
-        strokeThickness: 4,
-        wordWrap: { width: this.scale.width - 80 },
       })
-      .setOrigin(0.5, 0) // top center
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(20);
+
+    this.messageText.setStroke("#000000", 4);
 
     // Upgrade overlay
     this.upgradeOverlay = this.add
@@ -637,9 +672,7 @@ class MainScene extends Phaser.Scene {
         fontSize: "20px",
         fill: "#ffffff",
         align: "center",
-        stroke: "#000000",
-        strokeThickness: 4,
-        wordWrap: { width: this.scale.width - 80 },
+        wordWrap: { width: this.scale.width - 120 },
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
@@ -648,7 +681,7 @@ class MainScene extends Phaser.Scene {
 
     // Pause overlay
     this.pauseOverlay = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.7)
+      .rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.55)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(35)
@@ -660,9 +693,7 @@ class MainScene extends Phaser.Scene {
         fontSize: "18px",
         fill: "#ffffff",
         align: "center",
-        stroke: "#000000",
-        strokeThickness: 4,
-        wordWrap: { width: this.scale.width - 80 },
+        wordWrap: { width: this.scale.width - 120 },
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
@@ -671,10 +702,10 @@ class MainScene extends Phaser.Scene {
 
     // Game Over overlay (red)
     this.gameOverOverlay = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0x660000, 0.85)
+      .rectangle(0, 0, this.scale.width, this.scale.height, 0xaa0000, 0.8)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(60)
+      .setDepth(50)
       .setVisible(false);
 
     this.gameOverText = this.add
@@ -683,36 +714,32 @@ class MainScene extends Phaser.Scene {
         fontSize: "32px",
         fill: "#ffffff",
         align: "center",
-        stroke: "#000000",
-        strokeThickness: 6,
-        wordWrap: { width: this.scale.width - 120 },
+        wordWrap: { width: this.scale.width - 80 },
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
-      .setDepth(61)
+      .setDepth(51)
       .setVisible(false);
 
-    // Win overlay (cool blue)
-    this.winOverlay = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0x001133, 0.85)
+    // Victory overlay (green-ish)
+    this.victoryOverlay = this.add
+      .rectangle(0, 0, this.scale.width, this.scale.height, 0x006600, 0.8)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(60)
+      .setDepth(50)
       .setVisible(false);
 
-    this.winText = this.add
+    this.victoryText = this.add
       .text(this.scale.width / 2, this.scale.height / 2, "", {
         fontFamily: "sans-serif",
         fontSize: "32px",
         fill: "#ffffff",
         align: "center",
-        stroke: "#000000",
-        strokeThickness: 6,
-        wordWrap: { width: this.scale.width - 120 },
+        wordWrap: { width: this.scale.width - 80 },
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
-      .setDepth(61)
+      .setDepth(51)
       .setVisible(false);
   }
 
@@ -740,18 +767,17 @@ class MainScene extends Phaser.Scene {
   showTitleScreen() {
     const lines = [
       "City Watchkeeper",
-      "Protect the Building and Survive",
       "",
       "Controls:",
       "Move: WASD or Arrow Keys",
-      "Ward Attack(Forward Cone Attack): Left click or Space",
-      "Ward Totem (slow field): Right Click or Shift",
-      "Interact (altar / upgrades guy): E",
+      "Ward Attack: Space or Left Mouse",
+      "Ward Totem (slow field): Shift or Right Mouse",
+      "Interact (altar / upgrades): E",
       "Pause: Esc",
       "",
       "Goal: Survive all shifts and protect the mausoleum.",
       "",
-      "Press Space to begin your shift.",
+      "Press SPACE to begin your shift.",
     ];
 
     this.titleOverlay.setVisible(true);
@@ -764,7 +790,7 @@ class MainScene extends Phaser.Scene {
     this.titleText.setVisible(false);
     this.gamePhase = "intro";
     this.showMessage(
-      "Walk to the glowing altar and press E to start your first shift."
+      "Walk to the altar (Upgrade guy) and press E to start your first shift."
     );
   }
 
@@ -843,32 +869,13 @@ class MainScene extends Phaser.Scene {
       this.isPaused = false;
       this.hidePauseMenu();
       this.physics.world.resume();
+      if (this.music && !this.music.isPlaying) this.music.resume();
     } else {
       this.isPaused = true;
       this.showPauseMenu();
       this.physics.world.pause();
+      if (this.music && this.music.isPlaying) this.music.pause();
     }
-  }
-
-  showGameOverScreen(message) {
-    // Clear HUD text so the red overlay + big text are the focus
-    this.statusText.setText("");
-    this.waveText.setText("");
-    this.messageText.setText("");
-
-    this.gameOverOverlay.setVisible(true);
-    this.gameOverText.setText("GAME OVER\n\n" + message).setVisible(true);
-  }
-
-  showWinScreen() {
-    this.statusText.setText("");
-    this.waveText.setText("");
-    this.messageText.setText("");
-
-    this.winOverlay.setVisible(true);
-    this.winText
-      .setText("Night Survived!\n\nPress R to play again.")
-      .setVisible(true);
   }
 
   // --- Input ---------------------------------------------------
@@ -887,7 +894,7 @@ class MainScene extends Phaser.Scene {
       TWO: Phaser.Input.Keyboard.KeyCodes.TWO,
       THREE: Phaser.Input.Keyboard.KeyCodes.THREE,
       R: Phaser.Input.Keyboard.KeyCodes.R,
-      ENTER: Phaser.Input.Keyboard.KeyCodes.ENTER,
+      ENTER: Phaser.Input.Keyboard.KeyCodes.ENTER, // kept in case you ever want it
       ESC: Phaser.Input.Keyboard.KeyCodes.ESC,
     });
 
@@ -959,6 +966,9 @@ class MainScene extends Phaser.Scene {
     if (now < this.nextAttackTime) return;
     this.nextAttackTime = now + this.playerStats.wardCooldown;
 
+    // SFX
+    if (this.sfxWard) this.sfxWard.play();
+
     this.showWardEffect();
 
     const origin = new Phaser.Math.Vector2(this.player.x, this.player.y);
@@ -996,10 +1006,13 @@ class MainScene extends Phaser.Scene {
     this.totemCharges -= 1;
     this.updateUI();
 
+    // SFX
+    if (this.sfxTotem) this.sfxTotem.play();
+
     const circle = this.add.circle(
       this.player.x,
       this.player.y,
-      24,
+      18, // wider totem visual
       0x88ffff,
       0.8
     );
@@ -1041,7 +1054,6 @@ class MainScene extends Phaser.Scene {
   startNextWave() {
     this.currentWaveIndex += 1;
 
-    // Clear remaining things
     this.enemiesGroup.clear(true, true);
     this.totems.forEach((t) => t.destroy());
     this.totems = [];
@@ -1069,7 +1081,7 @@ class MainScene extends Phaser.Scene {
   // --- Main update loop ----------------------------------------
 
   update() {
-    // Handle title screen
+    // Title screen – start with SPACE
     if (this.gamePhase === "title") {
       if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
         this.hideTitleScreen();
@@ -1085,7 +1097,7 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
-    // Upgrade choice (1/2/3 UI)
+    // Upgrade choice (1/2/3)
     if (this.gamePhase === "choosingUpgrade") {
       if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
         this.applyUpgrade(1);
@@ -1097,14 +1109,11 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
-    // Pause toggle (Esc) – not allowed while in upgrade menu/title/gameover
+    // Pause toggle (Esc)
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
       this.togglePause();
     }
-
-    if (this.isPaused) {
-      return; // do nothing while paused
-    }
+    if (this.isPaused) return;
 
     // Interaction (E) at altar
     if (Phaser.Input.Keyboard.JustDown(this.keys.E) && this.isNearAltar()) {
@@ -1115,7 +1124,6 @@ class MainScene extends Phaser.Scene {
       }
     }
 
-    // Movement + extra key options for attacks/totems
     this.handlePlayerMovement();
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
