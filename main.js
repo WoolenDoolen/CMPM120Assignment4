@@ -604,7 +604,6 @@ class MainScene extends Phaser.Scene {
 
   // --- UI & overlays -------------------------------------------
 
-  // --- UI & overlays -------------------------------------------
   createUI() {
     const style = {
       fontFamily: "sans-serif",
@@ -760,6 +759,34 @@ class MainScene extends Phaser.Scene {
     this.waveText.setText(waveDisplay);
   }
 
+  showIntroPrompt() {
+    const text =
+      "Walk to the glowing altar and press E to start your first shift.";
+
+    // start big in the center
+    this.messageText.setText(text);
+    this.messageText.setFontSize(28);
+    this.messageText.setOrigin(0.5, 0.5);
+    this.messageText.setPosition(this.scale.width / 2, this.scale.height / 2);
+    this.messageText.setAlpha(1);
+    this.messageText.setScale(1.4);
+
+    // tween up to the normal HUD position at the top
+    this.tweens.add({
+      targets: this.messageText,
+      y: 32,
+      scale: 1,
+      duration: 900,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        // lock it into its usual top-center style
+        this.messageText.setOrigin(0.5, 0);
+        this.messageText.setFontSize(18);
+        this.messageText.setPosition(this.scale.width / 2, 32);
+      },
+    });
+  }
+
   showMessage(text) {
     this.messageText.setText(text);
   }
@@ -789,9 +816,9 @@ class MainScene extends Phaser.Scene {
     this.titleOverlay.setVisible(false);
     this.titleText.setVisible(false);
     this.gamePhase = "intro";
-    this.showMessage(
-      "Walk to the altar (Upgrade guy) and press E to start your first shift."
-    );
+
+    // animated intro instruction instead of tiny HUD text
+    this.showIntroPrompt();
   }
 
   openUpgradeMenu() {
@@ -825,7 +852,7 @@ class MainScene extends Phaser.Scene {
   applyUpgrade(choice) {
     if (choice === 1) {
       this.playerStats.damage += 1;
-      this.showMessage("Upgrade: Your ward hits harder.");
+      this.showMessage("Upgrade: Your ward (left click) hits harder.");
     } else if (choice === 2) {
       this.playerStats.moveSpeed = Math.round(
         this.playerStats.moveSpeed * 1.25
@@ -838,7 +865,9 @@ class MainScene extends Phaser.Scene {
         this.playerStats.totemRechargeTime - 1500
       );
       this.totemCharges = this.playerStats.maxTotems;
-      this.showMessage("Upgrade: Extra totem charge and faster recharge.");
+      this.showMessage(
+        "Upgrade: Extra totem (right click) charge and faster recharge."
+      );
     }
     this.updateUI();
     this.closeUpgradeMenu();
@@ -894,7 +923,7 @@ class MainScene extends Phaser.Scene {
       TWO: Phaser.Input.Keyboard.KeyCodes.TWO,
       THREE: Phaser.Input.Keyboard.KeyCodes.THREE,
       R: Phaser.Input.Keyboard.KeyCodes.R,
-      ENTER: Phaser.Input.Keyboard.KeyCodes.ENTER, // kept in case you ever want it
+      ENTER: Phaser.Input.Keyboard.KeyCodes.ENTER,
       ESC: Phaser.Input.Keyboard.KeyCodes.ESC,
     });
 
@@ -931,6 +960,16 @@ class MainScene extends Phaser.Scene {
     }
   }
 
+  // can the player use abilities right now?
+  canUseAbilities() {
+    return (
+      this.gamePhase === "intro" ||
+      this.gamePhase === "ready" ||
+      this.gamePhase === "awaitingUpgrade" ||
+      this.gamePhase === "wave"
+    );
+  }
+
   showWardEffect() {
     const graphics = this.add.graphics({ x: this.player.x, y: this.player.y });
     graphics.fillStyle(0x88ccff, 0.4);
@@ -961,7 +1000,7 @@ class MainScene extends Phaser.Scene {
   }
 
   tryWardAttack() {
-    if (this.gamePhase !== "wave") return;
+    if (!this.canUseAbilities()) return;
     const now = this.time.now;
     if (now < this.nextAttackTime) return;
     this.nextAttackTime = now + this.playerStats.wardCooldown;
@@ -1000,7 +1039,7 @@ class MainScene extends Phaser.Scene {
   }
 
   tryPlaceTotem() {
-    if (this.gamePhase !== "wave") return;
+    if (!this.canUseAbilities()) return;
     if (this.totemCharges <= 0) return;
 
     this.totemCharges -= 1;
@@ -1012,7 +1051,7 @@ class MainScene extends Phaser.Scene {
     const circle = this.add.circle(
       this.player.x,
       this.player.y,
-      18, // wider totem visual
+      18,
       0x88ffff,
       0.8
     );
