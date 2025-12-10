@@ -9,7 +9,7 @@
 ## 2. Group Members
 
 - **Todd Crandell** — level design, art selection & integration.
-- **[Partner Name]** — game system design, core implementation of top-down movement, waves, upgrades, UI, and overall polish.
+- **Alice Gu** — game system design, core implementation of top-down movement, waves, upgrades, UI, and overall polish.
 
 ---
 
@@ -127,3 +127,4 @@ In Project 4a, our written rubric still talked about a stealth game with guards,
 - The pause overlay shows controls and instructions. Press **Esc** again to resume.
 
 ---
+
